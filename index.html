@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Mail OAuth2 - Zekas Tools</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <header>
+            <div class="tabs">
+                <button class="tab-btn active">Đọc hòm thư</button>
+            </div>
+        </header>
+
+        <div class="main-layout">
+            <main class="content-area">
+                <section class="input-section">
+                    <div class="section-header">
+                        <h2>Nhập Email</h2>
+                        <div class="mode-selectors">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="graph-api">
+                                <span class="checkmark"></span>
+                                Graph API
+                            </label>
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="oauth2" checked>
+                                <span class="checkmark"></span>
+                                OAuth2
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="textarea-wrapper">
+                        <textarea id="email-input" placeholder="email|password|refresh_token|client_id"></textarea>
+                    </div>
+
+                    <div class="action-bar">
+                        <button id="btn-read" class="btn-primary">
+                            <i class="fas fa-envelope-open-text"></i> Đọc hòm thư
+                        </button>
+                    </div>
+                </section>
+
+                <section class="results-section">
+                    <div class="table-container">
+                        <table id="mail-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 250px;">Mail</th>
+                                    <th style="width: 60px; text-align: center;">STT</th>
+                                    <th style="width: 180px;">From</th>
+                                    <th style="width: 150px;">Time</th>
+                                    <th>Content</th>
+                                    <th style="width: 120px; text-align: center;">Code</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mail-tbody">
+                                <tr class="placeholder-row">
+                                    <td colspan="6">Chưa có dữ liệu...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+
+            <aside class="sidebar-logs">
+                <div class="section-header">
+                    <h2> Nhật ký</h2>
+                    <button id="btn-clear-logs" class="btn-icon" title="Xóa logs">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <div id="log-container" class="log-box">
+                    <div class="log-entry system">Sẵn sàng.</div>
+                </div>
+            </aside>
+        </div>
+
+        <footer>
+            <div class="status-bar">
+                <span id="status-text">Sẵn sàng</span>
+                <span id="counter">Số lượng: 0</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Modal xem nội dung email -->
+    <div id="email-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-subject">Tiêu đề email</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body" id="modal-body-content">
+                <!-- Nội dung email HTML sẽ đổ vào đây -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification system -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

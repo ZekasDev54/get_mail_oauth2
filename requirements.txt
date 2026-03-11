@@ -1,0 +1,2 @@
+# No external dependencies needed as we use standard libraries
+# But we keep this file for Render to detect this as a Python project
