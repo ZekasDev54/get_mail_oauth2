@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalBodyContent = document.getElementById('modal-body-content');
     const closeModal = document.querySelector('.close-modal');
 
-    // Store for message content to avoid breaking HTML attributes
+    // Store for message content
     const messageStorage = new Map();
 
     function logToUI(message, type = 'info') {
@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function parseDate(dateStr) {
         if (!dateStr) return new Date();
         let d = new Date(dateStr);
-        // Fix for formats like "2026-03-11 09:44:47"
         if (isNaN(d.getTime())) {
             d = new Date(dateStr.replace(/-/g, '/').replace('T', ' '));
         }
@@ -65,12 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
         emailModal.style.display = "block";
     }
 
-    // Exposed to window for the onclick handler
     window.viewFullMailById = (id) => {
         const data = messageStorage.get(id);
-        if (data) {
-            openEmailDetails(data.subject, data.body);
-        }
+        if (data) openEmailDetails(data.subject, data.body);
     };
 
     btnRead.addEventListener('click', async () => {
@@ -82,12 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const lines = input.split('\n');
         mailTbody.innerHTML = '';
-        messageStorage.clear(); // Clear storage for new run
+        messageStorage.clear();
         let totalCount = 0;
 
-        statusText.textContent = 'Đang thực hiện...';
+        statusText.textContent = 'Đang đọc mail...';
         btnRead.disabled = true;
-        logToUI(`Bắt đầu đọc ${lines.length} account...`, 'system');
+        logToUI(`Bắt đầu xử lý ${lines.length} account...`, 'system');
 
         for (const line of lines) {
             const rawLine = line.trim();
@@ -99,8 +95,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 continue;
             }
 
+            // Đưa đầy đủ 4 tham số vào payload theo yêu cầu của USER
             const account = {
                 email: parts[0].trim(),
+                password: parts[1].trim(),
                 refresh_token: parts[2].trim(),
                 client_id: parts[3].trim()
             };
@@ -121,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         addEmptyAccountRow(account.email);
                     }
                 } else {
-                    const err = data ? (data.message || "Unknown error") : "API Error";
+                    const err = data ? (data.message || "API Error (status false)") : "API Error";
                     logToUI(`Lỗi ${account.email}: ${err}`, 'error');
                     addErrorAccountRow(account.email, err);
                 }
@@ -132,28 +130,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         btnRead.disabled = false;
-        statusText.textContent = 'Hoàn thành';
+        statusText.textContent = 'Xong';
         counter.textContent = `Số lượng: ${totalCount}`;
     });
 
     async function fetchMail(account) {
+        // Gửi đầy đủ 4 tham số
+        const payload = {
+            email: account.email,
+            password: account.password,
+            refresh_token: account.refresh_token,
+            client_id: account.client_id
+        };
+
         const response = await fetch('/api_proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                email: account.email,
-                refresh_token: account.refresh_token,
-                client_id: account.client_id
-            })
+            body: JSON.stringify(payload)
         });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return await response.json();
+        const resText = await response.text();
+        if (!response.ok) {
+            // Cố gắng báo chi tiết lỗi từ HTML trả về của 502/500 nếu có
+            throw new Error(`HTTP ${response.status}: ${resText.substring(0, 100) || response.statusText}`);
+        }
+
+        try {
+            return JSON.parse(resText);
+        } catch (e) {
+            throw new Error('Dữ liệu API không phải JSON hợp lệ (có thể web bảo trì)');
+        }
     }
 
     function addAccountToTable(email, messages) {
         const groupId = 'group-' + Math.random().toString(36).substr(2, 6);
-
         createRow(email, messages[0], 1, false, groupId);
 
         if (messages.length > 1) {
@@ -179,7 +189,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 createRow(email, messages[i], i + 1, true, groupId);
             }
         }
-
         const div = document.createElement('tr');
         div.className = 'account-divider';
         div.innerHTML = '<td colspan="6"></td>';
@@ -202,11 +211,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = msg.message || "";
-        const cleanContent = tempDiv.textContent || tempDiv.innerText || "";
+        const cleanContent = (tempDiv.textContent || tempDiv.innerText || "").slice(0, 300);
 
         const extractedCode = msg.code || extractCode(cleanContent);
-
-        // Store message content safely to be viewed later
         const msgId = 'msg-' + Math.random().toString(36).substr(2, 9);
         messageStorage.set(msgId, { subject: msg.subject, body: msg.message });
 
@@ -217,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <td class="time-cell">${timeStr}</td>
             <td class="content-cell">
                 <div class="message-preview-container">
-                    <div class="message-preview"><strong>${msg.subject || 'No Subject'}</strong> - ${cleanContent.substring(0, 200)}</div>
+                    <div class="message-preview"><strong>${msg.subject || 'No Subject'}</strong> - ${cleanContent.substring(0, 120)}...</div>
                     <div class="chi-tiet-link" onclick="viewFullMailById('${msgId}')">Chi tiết >></div>
                 </div>
             </td>
@@ -237,7 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addErrorAccountRow(email, err) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td class="email-cell">${email}</td><td colspan="5" style="text-align:center; color:red;">Lỗi: ${err}</td>`;
+        tr.innerHTML = `<td class="email-cell">${email}</td><td colspan="5" style="text-align:center; color:#ef4444;">Lỗi: ${err.substring(0, 50)}...</td>`;
         mailTbody.appendChild(tr);
     }
 

@@ -2,9 +2,8 @@ import http.server
 import socketserver
 import os
 import json
-import urllib.request
-import urllib.error
-import ssl
+import requests
+import urllib.parse
 
 class MyHandler(http.server.SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -21,58 +20,55 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             
             target_url = "https://tools.dongvanfb.net/api/get_messages_oauth2"
             
+            # Giả lập Header một cách tự nhiên nhất
             headers = {
+                'Host': 'tools.dongvanfb.net',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Origin': 'https://tools.dongvanfb.net',
+                'Referer': 'https://tools.dongvanfb.net/get-messages-oauth2',
+                'Connection': 'keep-alive'
             }
             
             try:
-                # Bypass SSL verification if needed (common in local but good for safety)
-                context = ssl._create_unverified_context()
+                # Dùng requests để handle response mạnh mẽ hơn
+                # verify=False để bỏ qua lỗi SSL nếu có (thường gặp khi proxy)
+                response = requests.post(target_url, data=post_data, headers=headers, timeout=60, verify=True)
                 
-                req = urllib.request.Request(target_url, data=post_data, headers=headers, method='POST')
-                with urllib.request.urlopen(req, context=context, timeout=30) as response:
-                    res_status = response.getcode()
-                    res_body = response.read().decode()
-                    
-                    self.send_response(res_status)
-                    self.send_header('Content-Type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
-                    self.end_headers()
-                    self.wfile.write(res_body.encode())
-                    
-            except urllib.error.HTTPError as e:
-                error_body = e.read().decode()
-                self.send_response(e.code)
+                self.send_response(response.status_code)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                self.wfile.write(error_body.encode())
-            except Exception as e:
-                self.send_response(500)
+                
+                self.wfile.write(response.content)
+                print(f"API Forward Success: Code {response.status_code}")
+                
+            except requests.exceptions.RequestException as e:
+                print(f"Request Error: {str(e)}")
+                self.send_response(502)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": False, "message": str(e)}).encode())
+                err_msg = {"status": False, "message": f"Proxy Error: {str(e)}"}
+                self.wfile.write(json.dumps(err_msg).encode())
         else:
             super().do_POST()
 
-# Deployment configuration
 PORT = int(os.environ.get("PORT", 8000))
-# Bind to 0.0.0.0 is mandatory for cloud hosting
 HANDLER = MyHandler
 
 with socketserver.TCPServer(("0.0.0.0", PORT), HANDLER) as httpd:
-    print(f"Cloud-ready Server started at port {PORT}")
+    print(f"Server is running at port {PORT}")
     
-    # Only open browser if running locally (not on Render/Heroku)
+    # Auto open browser only on local
     if not os.environ.get("RENDER") and not os.environ.get("PORT"):
         import webbrowser
         import threading
         def open_browser():
             import time
-            time.sleep(1)
-            print(f"Opening browser at http://localhost:{PORT}")
+            time.sleep(2)
             webbrowser.open(f"http://localhost:{PORT}")
         threading.Thread(target=open_browser).start()
         
