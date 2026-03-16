@@ -52,26 +52,49 @@ jobs:
             REGISTRY_IMAGE="${{ secrets.REMOTE_REGISTRY_HOST }}/$IMAGE_NAME:$IMAGE_SHA_TAG"
             REGISTRY_USER="${{ secrets.REMOTE_REGISTRY_USER }}"
             REGISTRY_PASSWORD="${{ secrets.REMOTE_REGISTRY_PASSWORD }}"
+            SUDO_PASSWORD="${{ secrets.SUDO_PASSWORD }}"
+
+            USE_SUDO=0
+            if ! docker info >/dev/null 2>&1; then
+              USE_SUDO=1
+            fi
+
+            run_docker() {
+              if [ "$USE_SUDO" -eq 0 ]; then
+                docker "$@"
+              else
+                if ! command -v sudo >/dev/null 2>&1; then
+                  echo "docker requires sudo but sudo is not installed."
+                  exit 1
+                fi
+
+                if [ -n "$SUDO_PASSWORD" ]; then
+                  printf '%s\n' "$SUDO_PASSWORD" | sudo -S docker "$@"
+                else
+                  sudo docker "$@"
+                fi
+              fi
+            }
 
             # b2: SSH vao server (step nay dang duoc thuc hien trong action)
             # Load image da build tu runner vao Docker tren server
-            gunzip -c /tmp/image.tar.gz | docker load
+            gunzip -c /tmp/image.tar.gz | run_docker load
 
             # b3: Push image len registry host o server SSH
-            docker tag $IMAGE_NAME:$IMAGE_SHA_TAG $REGISTRY_IMAGE
+            run_docker tag $IMAGE_NAME:$IMAGE_SHA_TAG $REGISTRY_IMAGE
             if [ -n "$REGISTRY_USER" ] && [ -n "$REGISTRY_PASSWORD" ]; then
-              echo "$REGISTRY_PASSWORD" | docker login ${{ secrets.REMOTE_REGISTRY_HOST }} -u "$REGISTRY_USER" --password-stdin
+              echo "$REGISTRY_PASSWORD" | run_docker login ${{ secrets.REMOTE_REGISTRY_HOST }} -u "$REGISTRY_USER" --password-stdin
             else
               echo "Registry login skipped (no REMOTE_REGISTRY_USER/PASSWORD provided)."
             fi
-            docker push $REGISTRY_IMAGE
+            run_docker push $REGISTRY_IMAGE
 
             # b4: Pull image ve trong SSH server
-            docker pull $REGISTRY_IMAGE
+            run_docker pull $REGISTRY_IMAGE
 
             # b5: Chay image
-            docker rm -f $CONTAINER_NAME || true
-            docker run -d \
+            run_docker rm -f $CONTAINER_NAME || true
+            run_docker run -d \
               --name $CONTAINER_NAME \
               --restart unless-stopped \
               -p $APP_PORT:$APP_PORT \
