@@ -49,10 +49,23 @@ jobs:
             set -e
 
             IMAGE_SHA_TAG="${{ github.sha }}"
-            REGISTRY_IMAGE="${{ secrets.REMOTE_REGISTRY_HOST }}/$IMAGE_NAME:$IMAGE_SHA_TAG"
+            REMOTE_REGISTRY_HOST="${{ secrets.REMOTE_REGISTRY_HOST }}"
             REGISTRY_USER="${{ secrets.REMOTE_REGISTRY_USER }}"
             REGISTRY_PASSWORD="${{ secrets.REMOTE_REGISTRY_PASSWORD }}"
             SUDO_PASSWORD="${{ secrets.SUDO_PASSWORD }}"
+            FINAL_IMAGE="$IMAGE_NAME:$IMAGE_SHA_TAG"
+
+            if [ -n "$REMOTE_REGISTRY_HOST" ]; then
+              case "$REMOTE_REGISTRY_HOST" in
+                localhost|*.*|*:*)
+                  REGISTRY_IMAGE="$REMOTE_REGISTRY_HOST/$IMAGE_NAME:$IMAGE_SHA_TAG"
+                  ;;
+                *)
+                  echo "REMOTE_REGISTRY_HOST='$REMOTE_REGISTRY_HOST' is invalid. Use host:port or domain (e.g. localhost:5000)."
+                  exit 1
+                  ;;
+              esac
+            fi
 
             USE_SUDO=0
             if ! docker info >/dev/null 2>&1; then
@@ -81,16 +94,23 @@ jobs:
             gunzip -c /tmp/image.tar.gz | run_docker load
 
             # b3: Push image len registry host o server SSH
-            run_docker tag $IMAGE_NAME:$IMAGE_SHA_TAG $REGISTRY_IMAGE
-            if [ -n "$REGISTRY_USER" ] && [ -n "$REGISTRY_PASSWORD" ]; then
-              echo "$REGISTRY_PASSWORD" | run_docker login ${{ secrets.REMOTE_REGISTRY_HOST }} -u "$REGISTRY_USER" --password-stdin
-            else
-              echo "Registry login skipped (no REMOTE_REGISTRY_USER/PASSWORD provided)."
-            fi
-            run_docker push $REGISTRY_IMAGE
+            if [ -n "$REMOTE_REGISTRY_HOST" ]; then
+              run_docker tag "$FINAL_IMAGE" "$REGISTRY_IMAGE"
 
-            # b4: Pull image ve trong SSH server
-            run_docker pull $REGISTRY_IMAGE
+              if [ -n "$REGISTRY_USER" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+                echo "$REGISTRY_PASSWORD" | run_docker login "$REMOTE_REGISTRY_HOST" -u "$REGISTRY_USER" --password-stdin
+              else
+                echo "Registry login skipped (no REMOTE_REGISTRY_USER/PASSWORD provided)."
+              fi
+
+              run_docker push "$REGISTRY_IMAGE"
+
+              # b4: Pull image ve trong SSH server
+              run_docker pull "$REGISTRY_IMAGE"
+              FINAL_IMAGE="$REGISTRY_IMAGE"
+            else
+              echo "REMOTE_REGISTRY_HOST is empty -> skip push/pull registry, deploy local loaded image."
+            fi
 
             # b5: Chay image
             run_docker rm -f $CONTAINER_NAME || true
@@ -99,6 +119,6 @@ jobs:
               --restart unless-stopped \
               -p $APP_PORT:$APP_PORT \
               -e PORT=$APP_PORT \
-              $REGISTRY_IMAGE
+              "$FINAL_IMAGE"
 
             rm -f /tmp/image.tar.gz
