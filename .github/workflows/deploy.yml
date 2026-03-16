@@ -1,0 +1,74 @@
+name: Build And Deploy Docker
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: get-mail-oauth2
+  CONTAINER_NAME: get-mail-oauth2
+  APP_PORT: "8000"
+
+jobs:
+  build-transfer-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Build Docker image from Dockerfile
+        run: |
+          docker build -t $IMAGE_NAME:${{ github.sha }} .
+
+      - name: Export image to tar.gz
+        run: |
+          docker save $IMAGE_NAME:${{ github.sha }} | gzip > image.tar.gz
+
+      - name: Copy image archive to SSH server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: image.tar.gz
+          target: /tmp
+
+      - name: SSH deploy (push registry -> pull -> run)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+
+            IMAGE_SHA_TAG="${{ github.sha }}"
+            REGISTRY_IMAGE="${{ secrets.REMOTE_REGISTRY_HOST }}/$IMAGE_NAME:$IMAGE_SHA_TAG"
+
+            # b2: SSH vao server (step nay dang duoc thuc hien trong action)
+            # Load image da build tu runner vao Docker tren server
+            gunzip -c /tmp/image.tar.gz | docker load
+
+            # b3: Push image len registry host o server SSH
+            docker tag $IMAGE_NAME:$IMAGE_SHA_TAG $REGISTRY_IMAGE
+            docker login ${{ secrets.REMOTE_REGISTRY_HOST }} -u "${{ secrets.REMOTE_REGISTRY_USER }}" -p "${{ secrets.REMOTE_REGISTRY_PASSWORD }}"
+            docker push $REGISTRY_IMAGE
+
+            # b4: Pull image ve trong SSH server
+            docker pull $REGISTRY_IMAGE
+
+            # b5: Chay image
+            docker rm -f $CONTAINER_NAME || true
+            docker run -d \
+              --name $CONTAINER_NAME \
+              --restart unless-stopped \
+              -p $APP_PORT:$APP_PORT \
+              -e PORT=$APP_PORT \
+              $REGISTRY_IMAGE
+
+            rm -f /tmp/image.tar.gz
