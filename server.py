@@ -12,7 +12,7 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
-
+      
     def do_POST(self):
         if self.path == '/api_proxy':
             content_length = int(self.headers['Content-Length'])
