@@ -44,11 +44,14 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT || 22 }}
+          envs: IMAGE_NAME,CONTAINER_NAME,APP_PORT
           script: |
             set -e
 
             IMAGE_SHA_TAG="${{ github.sha }}"
             REGISTRY_IMAGE="${{ secrets.REMOTE_REGISTRY_HOST }}/$IMAGE_NAME:$IMAGE_SHA_TAG"
+            REGISTRY_USER="${{ secrets.REMOTE_REGISTRY_USER }}"
+            REGISTRY_PASSWORD="${{ secrets.REMOTE_REGISTRY_PASSWORD }}"
 
             # b2: SSH vao server (step nay dang duoc thuc hien trong action)
             # Load image da build tu runner vao Docker tren server
@@ -56,7 +59,11 @@ jobs:
 
             # b3: Push image len registry host o server SSH
             docker tag $IMAGE_NAME:$IMAGE_SHA_TAG $REGISTRY_IMAGE
-            docker login ${{ secrets.REMOTE_REGISTRY_HOST }} -u "${{ secrets.REMOTE_REGISTRY_USER }}" -p "${{ secrets.REMOTE_REGISTRY_PASSWORD }}"
+            if [ -n "$REGISTRY_USER" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+              echo "$REGISTRY_PASSWORD" | docker login ${{ secrets.REMOTE_REGISTRY_HOST }} -u "$REGISTRY_USER" --password-stdin
+            else
+              echo "Registry login skipped (no REMOTE_REGISTRY_USER/PASSWORD provided)."
+            fi
             docker push $REGISTRY_IMAGE
 
             # b4: Pull image ve trong SSH server
