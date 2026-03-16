@@ -57,6 +57,10 @@ jobs:
 
             if [ -n "$REMOTE_REGISTRY_HOST" ]; then
               case "$REMOTE_REGISTRY_HOST" in
+                [0-9]*)
+                  REMOTE_REGISTRY_HOST="localhost:$REMOTE_REGISTRY_HOST"
+                  REGISTRY_IMAGE="$REMOTE_REGISTRY_HOST/$IMAGE_NAME:$IMAGE_SHA_TAG"
+                  ;;
                 localhost|*.*|*:*)
                   REGISTRY_IMAGE="$REMOTE_REGISTRY_HOST/$IMAGE_NAME:$IMAGE_SHA_TAG"
                   ;;
